@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "AI Compliance Agent"
+version = "1.0.0"
+id = "artifacts/compliance-agent"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18511
+
+[services.development]
+run = "pnpm --filter @workspace/compliance-agent run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/compliance-agent", "run", "build" ]
+publicDir = "artifacts/compliance-agent/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18511"
+BASE_PATH = "/"

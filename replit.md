@@ -16,6 +16,10 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle)
 
+## Artifacts
+
+- **compliance-agent** (`/`): AI Compliance Agent — frontend-only React app that calls the OpenRouter API (`VITE_OPENROUTER_API_KEY`) to audit company data against compliance rules. Returns violations, risk level, recommendations, and a compliance score.
+
 ## Key Commands
 
 - `pnpm run typecheck` — full typecheck across all packages
