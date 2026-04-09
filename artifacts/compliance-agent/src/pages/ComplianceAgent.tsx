@@ -1,5 +1,16 @@
-import { useState, useRef } from "react";
-import { ShieldCheck, AlertTriangle, CheckCircle, Loader2, ChevronDown, RotateCcw } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import {
+  ShieldCheck,
+  AlertTriangle,
+  CheckCircle,
+  Loader2,
+  ChevronDown,
+  RotateCcw,
+  Key,
+  Eye,
+  EyeOff,
+  ExternalLink,
+} from "lucide-react";
 
 const INDUSTRIES = [
   { value: "general", label: "General" },
@@ -7,6 +18,8 @@ const INDUSTRIES = [
   { value: "finance", label: "Finance (SOX / PCI-DSS)" },
   { value: "manufacturing", label: "Manufacturing (ISO / OSHA)" },
 ];
+
+const API_KEY_STORAGE = "openrouter_api_key";
 
 interface ComplianceResult {
   extractedData: string;
@@ -29,17 +42,13 @@ function parseMarkdownSection(text: string, heading: string): string {
 function parseViolations(text: string): string[] {
   const raw = parseMarkdownSection(text, "Violations");
   if (!raw) return [];
-  if (
-    /no violations found/i.test(raw) ||
-    /none/i.test(raw.slice(0, 80))
-  ) {
+  if (/no violations found/i.test(raw) || /none/i.test(raw.slice(0, 80))) {
     return [];
   }
-  const lines = raw
+  return raw
     .split("\n")
     .map((l) => l.replace(/^[-*\d.]\s*/, "").trim())
     .filter((l) => l.length > 0);
-  return lines;
 }
 
 function scoreColor(score: number): string {
@@ -57,18 +66,17 @@ function scoreBarColor(score: number): string {
 function riskBadgeColor(risk: string): string {
   const lower = risk.toLowerCase();
   if (lower.includes("low")) return "bg-green-100 text-green-800 border-green-200";
-  if (lower.includes("medium") || lower.includes("moderate")) return "bg-yellow-100 text-yellow-800 border-yellow-200";
-  if (lower.includes("high") || lower.includes("critical")) return "bg-red-100 text-red-800 border-red-200";
+  if (lower.includes("medium") || lower.includes("moderate"))
+    return "bg-yellow-100 text-yellow-800 border-yellow-200";
+  if (lower.includes("high") || lower.includes("critical"))
+    return "bg-red-100 text-red-800 border-red-200";
   return "bg-gray-100 text-gray-800 border-gray-200";
 }
 
 function RiskIcon({ risk }: { risk: string }) {
   const lower = risk.toLowerCase();
-  if (lower.includes("low"))
-    return <CheckCircle className="w-4 h-4 text-green-600" />;
-  if (lower.includes("medium") || lower.includes("moderate"))
-    return <AlertTriangle className="w-4 h-4 text-yellow-600" />;
-  return <AlertTriangle className="w-4 h-4 text-red-600" />;
+  if (lower.includes("low")) return <CheckCircle className="w-4 h-4 text-green-600" />;
+  return <AlertTriangle className="w-4 h-4 text-yellow-600" />;
 }
 
 function SectionCard({
@@ -81,9 +89,7 @@ function SectionCard({
   accent?: string;
 }) {
   return (
-    <div
-      className={`rounded-xl border bg-card shadow-sm overflow-hidden ${accent ? "border-l-4 " + accent : ""}`}
-    >
+    <div className={`rounded-xl border bg-card shadow-sm overflow-hidden ${accent ? "border-l-4 " + accent : ""}`}>
       <div className="px-5 py-3 border-b bg-muted/40">
         <h3 className="font-semibold text-sm text-foreground tracking-wide uppercase opacity-70">
           {title}
@@ -97,6 +103,10 @@ function SectionCard({
 }
 
 export default function ComplianceAgent() {
+  const [apiKey, setApiKey] = useState("");
+  const [showKey, setShowKey] = useState(false);
+  const [apiKeySaved, setApiKeySaved] = useState(false);
+
   const [companyData, setCompanyData] = useState("");
   const [rules, setRules] = useState("");
   const [industry, setIndustry] = useState("general");
@@ -105,9 +115,37 @@ export default function ComplianceAgent() {
   const [error, setError] = useState<string | null>(null);
   const resultRef = useRef<HTMLDivElement>(null);
 
+  // Load saved API key from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem(API_KEY_STORAGE);
+    if (saved) {
+      setApiKey(saved);
+      setApiKeySaved(true);
+    }
+  }, []);
+
+  function saveApiKey() {
+    const trimmed = apiKey.trim();
+    if (!trimmed) return;
+    localStorage.setItem(API_KEY_STORAGE, trimmed);
+    setApiKey(trimmed);
+    setApiKeySaved(true);
+  }
+
+  function clearApiKey() {
+    localStorage.removeItem(API_KEY_STORAGE);
+    setApiKey("");
+    setApiKeySaved(false);
+  }
+
   async function runAgent() {
+    const key = apiKey.trim();
+    if (!key) {
+      setError("Please enter your OpenRouter API key above.");
+      return;
+    }
     if (!companyData.trim() || !rules.trim()) {
-      setError("Please fill in both Company Data and Compliance Rules before running.");
+      setError("Please fill in both Company Data and Compliance Rules.");
       return;
     }
 
@@ -115,7 +153,8 @@ export default function ComplianceAgent() {
     setResult(null);
     setLoading(true);
 
-    const selectedIndustry = INDUSTRIES.find((i) => i.value === industry)?.label ?? "General";
+    const selectedIndustry =
+      INDUSTRIES.find((i) => i.value === industry)?.label ?? "General";
 
     const prompt = `You are a strict compliance auditor specializing in ${selectedIndustry} regulations.
 
@@ -137,7 +176,7 @@ Instructions:
 
 If no violations are found, clearly state "No violations found."
 
-Format your response using EXACTLY these headings (no extra headings):
+Format your response using EXACTLY these headings:
 ### Extracted Data
 ### Extracted Rules
 ### Violations
@@ -145,13 +184,10 @@ Format your response using EXACTLY these headings (no extra headings):
 ### Recommendations`;
 
     try {
-      const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
-      if (!apiKey) throw new Error("OpenRouter API key is not configured.");
-
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: `Bearer ${key}`,
           "Content-Type": "application/json",
           "HTTP-Referer": window.location.origin,
           "X-Title": "AI Compliance Agent",
@@ -165,7 +201,18 @@ Format your response using EXACTLY these headings (no extra headings):
 
       if (!response.ok) {
         const errBody = await response.text();
-        throw new Error(`API error ${response.status}: ${errBody}`);
+        let friendly = `API error ${response.status}`;
+        try {
+          const parsed = JSON.parse(errBody);
+          friendly += `: ${parsed?.error?.message ?? errBody}`;
+        } catch {
+          friendly += `: ${errBody}`;
+        }
+        if (response.status === 401) {
+          friendly =
+            "Invalid API key. Please check your OpenRouter key and try again.";
+        }
+        throw new Error(friendly);
       }
 
       const data = await response.json();
@@ -213,9 +260,72 @@ Format your response using EXACTLY these headings (no extra headings):
             AI Compliance Agent
           </h1>
           <p className="mt-2 text-muted-foreground text-base max-w-lg mx-auto">
-            Paste your company data and compliance rules below. The AI will
-            audit them, identify violations, and generate a compliance score.
+            Paste your company data and compliance rules. The AI will audit
+            them, identify violations, and generate a compliance score.
           </p>
+        </div>
+
+        {/* API Key Card */}
+        <div className="rounded-2xl border bg-card shadow-sm p-5 mb-5">
+          <div className="flex items-center gap-2 mb-3">
+            <Key className="w-4 h-4 text-primary" />
+            <span className="text-sm font-semibold text-foreground">
+              OpenRouter API Key
+            </span>
+            {apiKeySaved && (
+              <span className="ml-auto text-xs text-green-600 font-medium bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">
+                Saved locally
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground mb-3">
+            Your key is stored only in your browser — never sent anywhere except
+            directly to OpenRouter.{" "}
+            <a
+              href="https://openrouter.ai/keys"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary inline-flex items-center gap-0.5 hover:underline"
+            >
+              Get a free key <ExternalLink className="w-3 h-3" />
+            </a>
+          </p>
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <input
+                type={showKey ? "text" : "password"}
+                value={apiKey}
+                onChange={(e) => {
+                  setApiKey(e.target.value);
+                  setApiKeySaved(false);
+                }}
+                placeholder="sk-or-v1-..."
+                className="w-full rounded-lg border border-input bg-background px-3 py-2 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition font-mono"
+              />
+              <button
+                onClick={() => setShowKey(!showKey)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition"
+                tabIndex={-1}
+              >
+                {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            <button
+              onClick={saveApiKey}
+              disabled={!apiKey.trim() || apiKeySaved}
+              className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Save
+            </button>
+            {apiKeySaved && (
+              <button
+                onClick={clearApiKey}
+                className="px-3 py-2 rounded-lg border border-input text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition"
+              >
+                Clear
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Input Card */}
@@ -250,7 +360,7 @@ Format your response using EXACTLY these headings (no extra headings):
               value={companyData}
               onChange={(e) => setCompanyData(e.target.value)}
               rows={6}
-              placeholder="Paste your company's operational data, policies, or practices here...&#10;&#10;Example: Our company stores patient records without encryption. Employees share login credentials. We do not conduct annual security audits."
+              placeholder={`Paste your company's operational data, policies, or practices here...\n\nExample: Our company stores patient records without encryption. Employees share login credentials. We do not conduct annual security audits.`}
               className="w-full rounded-lg border border-input bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-y transition"
             />
           </div>
@@ -264,7 +374,7 @@ Format your response using EXACTLY these headings (no extra headings):
               value={rules}
               onChange={(e) => setRules(e.target.value)}
               rows={6}
-              placeholder="Enter the compliance rules, regulations, or standards to check against...&#10;&#10;Example: All patient records must be encrypted at rest and in transit. Each employee must have unique login credentials. Annual security audits are mandatory."
+              placeholder={`Enter the compliance rules, regulations, or standards to check against...\n\nExample: All patient records must be encrypted at rest and in transit. Each employee must have unique login credentials. Annual security audits are mandatory.`}
               className="w-full rounded-lg border border-input bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-y transition"
             />
           </div>
@@ -339,9 +449,7 @@ Format your response using EXACTLY these headings (no extra headings):
                   <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">
                     Risk Level
                   </p>
-                  <span
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm font-semibold ${riskBadgeColor(result.riskLevel)}`}
-                  >
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm font-semibold ${riskBadgeColor(result.riskLevel)}`}>
                     <RiskIcon risk={result.riskLevel} />
                     {result.riskLevel || "Unknown"}
                   </span>
@@ -377,42 +485,35 @@ Format your response using EXACTLY these headings (no extra headings):
                       <span className="mt-0.5 shrink-0 w-5 h-5 rounded-full bg-red-100 border border-red-200 flex items-center justify-center text-red-700 text-xs font-bold">
                         {i + 1}
                       </span>
-                      <span className="text-foreground">{v}</span>
+                      <span>{v}</span>
                     </li>
                   ))}
                 </ul>
               )}
             </SectionCard>
 
-            {/* Recommendations */}
             {result.recommendations && (
               <SectionCard title="Recommendations" accent="border-l-blue-500">
                 <div className="whitespace-pre-wrap">{result.recommendations}</div>
               </SectionCard>
             )}
 
-            {/* Extracted Data */}
             {result.extractedData && (
               <SectionCard title="Extracted Company Data">
-                <div className="whitespace-pre-wrap text-muted-foreground">
-                  {result.extractedData}
-                </div>
+                <div className="whitespace-pre-wrap text-muted-foreground">{result.extractedData}</div>
               </SectionCard>
             )}
 
-            {/* Extracted Rules */}
             {result.extractedRules && (
               <SectionCard title="Extracted Compliance Rules">
-                <div className="whitespace-pre-wrap text-muted-foreground">
-                  {result.extractedRules}
-                </div>
+                <div className="whitespace-pre-wrap text-muted-foreground">{result.extractedRules}</div>
               </SectionCard>
             )}
           </div>
         )}
 
         <p className="text-center text-xs text-muted-foreground mt-10">
-          Powered by OpenRouter AI &mdash; Results are AI-generated and should be reviewed by a qualified compliance professional.
+          Powered by OpenRouter AI &mdash; Results should be reviewed by a qualified compliance professional.
         </p>
       </div>
     </div>
