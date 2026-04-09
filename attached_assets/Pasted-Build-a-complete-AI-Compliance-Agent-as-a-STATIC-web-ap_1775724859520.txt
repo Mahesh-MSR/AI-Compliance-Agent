@@ -1,0 +1,128 @@
+Build a complete AI Compliance Agent as a STATIC web application that can run directly on GitHub Pages.
+
+TECH STACK:
+- HTML
+- CSS
+- JavaScript (no Python, no backend)
+
+GOAL:
+Create a fully functional compliance checking web app that uses OpenRouter API from the frontend.
+
+---
+
+FEATURES:
+
+1. Input Section:
+- A large text area where user enters:
+  • Company Data
+  • Compliance Rules
+
+2. Dropdown:
+- Industry selection:
+  • General
+  • Healthcare
+  • Finance
+  • Manufacturing
+
+3. Button:
+- "Run Compliance Agent"
+
+4. Output Section:
+Display results in structured format:
+- Extracted Data
+- Extracted Rules
+- Violations
+- Risk Level
+- Recommendations
+- Compliance Score
+
+---
+
+API INTEGRATION:
+
+Use JavaScript fetch() to call:
+https://openrouter.ai/api/v1/chat/completions
+
+Headers:
+- Authorization: Bearer YOUR_API_KEY
+- Content-Type: application/json
+- HTTP-Referer: http://localhost
+- X-Title: Compliance Agent
+
+Model:
+- "openrouter/auto"
+
+---
+
+PROMPT LOGIC (VERY IMPORTANT):
+
+Send this structured prompt to AI:
+
+"You are a strict compliance auditor.
+
+Analyze the input carefully:
+- Extract company data
+- Extract compliance rules
+- Compare logically
+- Identify ONLY real violations
+- Assign risk level
+- Suggest recommendations
+
+Do NOT hallucinate.
+If no violations, clearly say 'No violations found'.
+
+Format response using headings:
+### Extracted Data
+### Extracted Rules
+### Violations
+### Risk Level
+### Recommendations"
+
+---
+
+SCORING SYSTEM (MUST BE IN JAVASCRIPT):
+
+- Start with score = 100
+- Subtract 20 for each violation found
+- Minimum score = 0
+- Display score clearly
+
+---
+
+UI REQUIREMENTS:
+
+- Clean modern UI
+- Centered container
+- Responsive design
+- Styled button
+- Use CSS for good spacing and colors
+- Output should be well formatted (use innerHTML)
+
+---
+
+FILE STRUCTURE:
+
+index.html
+style.css
+script.js
+
+---
+
+IMPORTANT:
+
+- No backend (must run fully in browser)
+- Must work when deployed on GitHub Pages
+- Code should be beginner-friendly
+- Include comments in JavaScript
+- Handle errors (API failure, empty input)
+
+---
+
+OUTPUT:
+
+Provide full working code for:
+1. index.html
+2. style.css
+3. script.js
+
+Ensure everything works when opened directly in browser.
